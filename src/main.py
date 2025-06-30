@@ -1,44 +1,40 @@
 import os
-import typer
-from fastmcp.client import Client
+from fastmcp import FastMCP
 from src.pdf_loader import find_pdfs, extract_text_from_pdf
 
-app = typer.Typer()
+mcp = FastMCP(name="PDFResourceServer")
 
-@app.command()
-def start_client(pdf_dir: str):
-    """MCPクライアントを起動し、PDFをリソースとして公開します。"""
-    client = Client()
+@mcp.resource("pdf://{filename}")
+def get_pdf_resource(filename: str):
+    pdf_dir = os.environ.get("PDF_DIR", "./pdfs") # 環境変数からPDFディレクトリを取得、デフォルトは./pdfs
+    pdf_path = os.path.join(pdf_dir, filename)
 
-    pdf_files = find_pdfs(pdf_dir)
-    if not pdf_files:
-        print(f"No PDF files found in {pdf_dir}")
-        return
+    if not os.path.exists(pdf_path) or not pdf_path.endswith(".pdf"):
+        return None # リソースが見つからない場合はNoneを返す
 
-    for pdf_path in pdf_files:
-        filename = os.path.basename(pdf_path)
-        resource_id = f"pdf/{filename}"
-        
-        print(f"Processing {pdf_path}...")
-        try:
-            content = extract_text_from_pdf(pdf_path)
-            if content:
-                client.set_resource(resource_id, content)
-                print(f"Resource '{resource_id}' created.")
-            else:
-                print(f"No text could be extracted from {pdf_path}.")
-        except Exception as e:
-            print(f"Error processing {pdf_path}: {e}")
+    try:
+        content = extract_text_from_pdf(pdf_path)
+        return content
+    except Exception as e:
+        print(f"Error extracting text from {pdf_path}: {e}")
+        return None
 
-    print("\nMCP client is running with the loaded PDF resources.")
-    # 実際のシナリオでは、クライアントはアクティブになり、リクエストを待機します。
-    # この例では、リソースを出力して終了します。
-    # クライアントを実行し続けるには、通常、サーバープロセスでこれを実行します。
-    print("\nAvailable resources:")
-    for resource_id in client.get_resources():
-        print(f"- {resource_id}")
+
 
 if __name__ == "__main__":
-    app()
+    # サーバー起動時にPDFをスキャンし、利用可能なリソースをログに出力
+    pdf_dir = os.environ.get("PDF_DIR", "./pdfs")
+    if not os.path.exists(pdf_dir):
+        print(f"Warning: PDF directory '{pdf_dir}' does not exist. Please create it and place PDF files inside.")
+    else:
+        pdf_files = find_pdfs(pdf_dir)
+        if not pdf_files:
+            print(f"No PDF files found in '{pdf_dir}'.")
+        else:
+            print(f"Found {len(pdf_files)} PDF files in '{pdf_dir}':")
+            for pdf_path in pdf_files:
+                filename = os.path.basename(pdf_path)
+                print(f"- pdf/{filename}")
 
-
+    print("Starting MCP server...")
+    mcp.run()
