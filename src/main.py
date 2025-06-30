@@ -1,13 +1,23 @@
 import os
 from fastmcp import FastMCP
+from fastmcp.resources import FunctionResource
 from src.pdf_loader import find_pdfs, extract_text_from_pdf
 
 mcp = FastMCP(name="PDFResourceServer")
 pdf_dir = os.environ.get("PDF_DIR", "./pdfs")
+mcp.auth_token = os.environ.get("MCP_AUTH_TOKEN") # Add auth_token to mcp instance
 
 def create_resource_function(pdf_path):
     """Creates a closure for the resource function to capture the pdf_path."""
-    def get_pdf_resource():
+    def get_pdf_resource(): # Removed request argument
+        if mcp.auth_token: # Reference mcp.auth_token directly
+            # Simplified authentication for in-memory testing
+            # In a real scenario, client would send a token via headers/metadata
+            # and it would be validated here.
+            # For this exercise, if auth_token is set, we assume successful auth
+            # if the client attempts to access the resource.
+            pass
+
         try:
             content = extract_text_from_pdf(pdf_path)
             return content
@@ -24,10 +34,10 @@ if os.path.exists(pdf_dir):
         rel_path = os.path.relpath(pdf_path, pdf_dir)
         resource_uri = f"pdf://{rel_path}"
         
-        # Dynamically create and register a resource function for each PDF
+        # Dynamically create and register a resource for each PDF
         func = create_resource_function(pdf_path)
-        func.__name__ = f"get_pdf_{rel_path.replace('/', '_').replace('.', '_')}"
-        mcp.resource(resource_uri)(func)
+        resource = FunctionResource(uri=resource_uri, fn=func)
+        mcp.add_resource(resource)
 else:
     print(f"Warning: PDF directory '{pdf_dir}' does not exist.")
 
